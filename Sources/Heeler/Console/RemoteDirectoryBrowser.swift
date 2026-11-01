@@ -28,22 +28,34 @@ final class RemoteDirectoryBrowser: Identifiable {
     var refusal: String?
     /// Narrows the current listing only; it never walks the tree.
     var filter = ""
+    /// Shared across browser presentations and app launches.
+    var showsHiddenDirectories: Bool {
+        didSet { defaults.set(showsHiddenDirectories, forKey: Self.showsHiddenDirectoriesKey) }
+    }
 
+    private static let showsHiddenDirectoriesKey = "directory-browser-shows-hidden-directories"
+    @ObservationIgnored private let defaults: UserDefaults
     private let resolveHome: ResolveHome
     private let list: ListDirectories
     private var loadTask: Task<Void, Never>?
     private var requestedPath: String?
 
-    init(resolveHome: @escaping ResolveHome, list: @escaping ListDirectories) {
+    init(
+        resolveHome: @escaping ResolveHome, list: @escaping ListDirectories,
+        defaults: UserDefaults = .standard
+    ) {
         self.resolveHome = resolveHome
         self.list = list
+        self.defaults = defaults
+        self.showsHiddenDirectories =
+            defaults.object(forKey: Self.showsHiddenDirectoriesKey) as? Bool ?? true
     }
 
     /// The current listing narrowed by the filter, in server order.
     var visibleDirectories: [String] {
-        guard !filter.isEmpty else { return directories }
         return directories.filter {
-            $0.localizedCaseInsensitiveContains(filter)
+            (showsHiddenDirectories || !$0.hasPrefix("."))
+                && (filter.isEmpty || $0.localizedCaseInsensitiveContains(filter))
         }
     }
 

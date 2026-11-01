@@ -41,9 +41,10 @@ struct RemoteDirectoryBrowserTests {
 
     private func makeBrowser(
         _ fake: FakeLister,
-        home: String = "/home/you"
+        home: String = "/home/you",
+        defaults: UserDefaults = UserDefaults(suiteName: "directory-browser-test-\(UUID().uuidString)")!
     ) -> RemoteDirectoryBrowser {
-        RemoteDirectoryBrowser(resolveHome: { home }, list: fake.list)
+        RemoteDirectoryBrowser(resolveHome: { home }, list: fake.list, defaults: defaults)
     }
 
     private func waitUntil(
@@ -94,6 +95,32 @@ struct RemoteDirectoryBrowserTests {
 
         browser.filter = ""
         #expect(browser.visibleDirectories == ["alpha", "beta"])
+    }
+
+    @Test func dotfileVisibilityPersistsAndCombinesWithTheFilterWithoutReloading() async throws {
+        let domain = "directory-browser-test-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let fake = FakeLister()
+        fake.listings["/home/you"] = RemoteDirectoryListing(
+            directories: [".config", ".git", "config", "src"], truncated: false)
+        let browser = makeBrowser(fake, defaults: defaults)
+        browser.start()
+        try await waitUntil("home loaded") { browser.currentPath != nil }
+        #expect(browser.showsHiddenDirectories)
+        #expect(browser.visibleDirectories == [".config", ".git", "config", "src"])
+
+        browser.showsHiddenDirectories = false
+        #expect(browser.visibleDirectories == ["config", "src"])
+        browser.filter = "CONFIG"
+        #expect(browser.visibleDirectories == ["config"])
+        let reopened = makeBrowser(fake, defaults: try #require(UserDefaults(suiteName: domain)))
+        #expect(!reopened.showsHiddenDirectories)
+
+        browser.showsHiddenDirectories = true
+        #expect(browser.visibleDirectories == [".config", "config"])
+        #expect(makeBrowser(fake, defaults: defaults).showsHiddenDirectories)
+        #expect(fake.calls == ["/home/you"])
     }
 
     @Test func windowsHomeSupportsEnteringAndReturningToTheDriveRoot() async throws {

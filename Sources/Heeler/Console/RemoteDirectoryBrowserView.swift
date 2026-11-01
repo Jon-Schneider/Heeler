@@ -159,6 +159,19 @@ struct RemoteDirectoryBrowserView: View {
             .navigationTitle(purpose.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        browser.showsHiddenDirectories.toggle()
+                    } label: {
+                        if browser.showsHiddenDirectories {
+                            Label("Hide Dotfiles", systemImage: "eye.slash")
+                        } else {
+                            Label("Show Dotfiles", systemImage: "eye")
+                        }
+                    }
+                    .accessibilityValue(browser.showsHiddenDirectories ? Text("Shown") : Text("Hidden"))
+                    .accessibilityIdentifier("directory-browser-toggle-dotfiles")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     if isUsing {
                         ProgressView()

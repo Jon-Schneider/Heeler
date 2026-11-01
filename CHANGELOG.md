@@ -9,6 +9,9 @@ Entries reference the pull request that made the change.
 
 ### Added
 
+- Show or hide dot-prefixed folders with a toolbar button in the Workspace
+  directory browser. The choice persists across app launches.
+  ([PR #1](https://github.com/Jon-Schneider/Heeler/pull/1))
 - Turn Usage off in Settings to hide its tab and each Host's Usage section and
   stop reading usage from your Hosts. Usage widgets clear their figures and say
   so until you turn it back on. (#597)
