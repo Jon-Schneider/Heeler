@@ -9,6 +9,9 @@ Entries reference the pull request that made the change.
 
 ### Added
 
+- New Agent remembers the last Agent type you selected, choosing it again
+  when installed on the selected Host.
+  ([PR #2](https://github.com/Jon-Schneider/Heeler/pull/2))
 - Turn Usage off in Settings to hide its tab and each Host's Usage section and
   stop reading usage from your Hosts. Usage widgets clear their figures and say
   so until you turn it back on. (#597)

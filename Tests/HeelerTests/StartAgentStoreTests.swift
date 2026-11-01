@@ -63,6 +63,7 @@ struct StartAgentStoreTests {
         awaitAgentVisible: @escaping (ConsoleAgent.ID) async -> Void = { _ in },
         origin: StartAgentStore.LaunchOrigin? = nil,
         recents: RecentWorkspaceStore? = nil,
+        defaults: UserDefaults = UserDefaults(suiteName: "agent-kind-test-\(UUID().uuidString)")!,
         recorder: StartRecorder
     ) -> StartAgentStore {
         StartAgentStore(
@@ -75,7 +76,8 @@ struct StartAgentStoreTests {
             },
             awaitAgentVisible: awaitAgentVisible,
             origin: origin,
-            recents: recents ?? makeRecents())
+            recents: recents ?? makeRecents(),
+            defaults: defaults)
     }
 
     /// The `.started` state a default-recorder submit lands in: the recorder's
@@ -372,6 +374,59 @@ struct StartAgentStoreTests {
         #expect(store.agentDiscoveryState == .loaded)
         #expect(store.availableAgentKinds == [.codex, .claude])
         #expect(store.selectedAgentKind == .codex)
+    }
+
+    @Test func lastSelectedAgentTypeIsRestoredWithoutSubmitting() async throws {
+        let domain = "agent-kind-test-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let host = Host.fixture()
+        let recorder = StartRecorder()
+        let store = makeStore(
+            hosts: [host], agentKinds: { _ in [.claude, .codex] },
+            defaults: defaults, recorder: recorder)
+        await store.discoverAgents()
+        #expect(store.selectedAgentKind == .claude)
+        store.selectedAgentKind = .codex
+
+        let reopened = makeStore(
+            hosts: [host], agentKinds: { _ in [.claude, .codex] },
+            defaults: try #require(UserDefaults(suiteName: domain)), recorder: recorder)
+        await reopened.discoverAgents()
+        #expect(reopened.selectedAgentKind == .codex)
+        #expect(recorder.params.isEmpty)
+    }
+
+    @Test func unavailableAndEmptyHostsDoNotForgetTheLastAgentType() async throws {
+        let domain = "agent-kind-test-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let hostA = Host.fixture(address: "a.example")
+        let hostB = Host.fixture(address: "b.example")
+        let store = makeStore(
+            hosts: [hostA, hostB],
+            agentKinds: { $0 == hostA.id ? [.claude, .codex] : [.claude] },
+            defaults: defaults, recorder: StartRecorder())
+        store.selectedHostID = hostA.id
+        await store.discoverAgents()
+        store.selectedAgentKind = .codex
+
+        store.selectedHostID = hostB.id
+        await store.discoverAgents()
+        #expect(store.selectedAgentKind == .claude)
+
+        let empty = makeStore(
+            hosts: [hostB], agentKinds: { _ in [] },
+            defaults: defaults, recorder: StartRecorder())
+        await empty.discoverAgents()
+        #expect(empty.selectedAgentKind == nil)
+
+        store.selectedHostID = hostA.id
+        await store.discoverAgents()
+        #expect(store.selectedAgentKind == .codex)
+        store.selectedAgentKind = .claude
+        await store.discoverAgents()
+        #expect(store.selectedAgentKind == .claude)
     }
 
     @Test func discoverySurfacesFailureAndSupportsAnEmptyResult() async {

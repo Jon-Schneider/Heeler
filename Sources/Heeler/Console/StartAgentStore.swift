@@ -144,7 +144,15 @@ final class StartAgentStore {
     /// `claude-2`, …), mirroring how the herdr TUI labels unnamed agents.
     var name: String = ""
     /// The canonical kind selected from the Host availability probe.
-    var selectedAgentKind: SupportedAgentKind?
+    var selectedAgentKind: SupportedAgentKind? {
+        didSet {
+            // Discovery's default and clearing a Host never replace the user's pick.
+            guard agentDiscoveryState == .loaded, let selectedAgentKind,
+                availableAgentKinds.contains(selectedAgentKind)
+            else { return }
+            defaults.set(selectedAgentKind.rawValue, forKey: Self.lastAgentKindKey)
+        }
+    }
     /// Optional native arguments, parsed into argv without invoking a shell.
     /// The editor disables smart punctuation at the UIKit input-trait layer;
     /// parsing still normalizes any smart characters supplied by paste or a
@@ -229,6 +237,8 @@ final class StartAgentStore {
     /// missing-Agent placeholder over a launch that just succeeded.
     private let awaitAgentVisible: (ConsoleAgent.ID) async -> Void
     @ObservationIgnored private let recents: RecentWorkspaceStore
+    private static let lastAgentKindKey = "last-selected-agent-kind"
+    @ObservationIgnored private let defaults: UserDefaults
     /// In-flight guard flipped synchronously before the first await, so a
     /// double-tap cannot dispatch the same command twice through the window
     /// before `state == .starting` disables the button.
@@ -243,7 +253,8 @@ final class StartAgentStore {
         start: @escaping (AgentLaunchRequest, LaunchDestination, Host.ID) async throws -> Agent,
         awaitAgentVisible: @escaping (ConsoleAgent.ID) async -> Void,
         origin: LaunchOrigin? = nil,
-        recents: RecentWorkspaceStore = RecentWorkspaceStore()
+        recents: RecentWorkspaceStore = RecentWorkspaceStore(),
+        defaults: UserDefaults = .standard
     ) {
         self.hosts = hosts
         self.origin = origin
@@ -254,6 +265,7 @@ final class StartAgentStore {
         self.start = start
         self.awaitAgentVisible = awaitAgentVisible
         self.recents = recents
+        self.defaults = defaults
         // Pre-select when there is no choice to make.
         self.selectedHostID = origin?.hostID ?? (hosts.count == 1 ? hosts.first?.id : nil)
     }
@@ -357,7 +369,8 @@ final class StartAgentStore {
             let kinds = try await discoverAgentKinds(hostID)
             guard selectedHostID == hostID else { return }
             availableAgentKinds = kinds
-            selectedAgentKind = kinds.first
+            let remembered = defaults.string(forKey: Self.lastAgentKindKey)
+            selectedAgentKind = kinds.first(where: { $0.rawValue == remembered }) ?? kinds.first
             agentDiscoveryState = .loaded
         } catch is CancellationError {
             guard selectedHostID == hostID else { return }
